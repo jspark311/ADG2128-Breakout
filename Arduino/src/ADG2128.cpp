@@ -17,32 +17,27 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-
-This driver's relationship to the base I2CDevice class is that the switch
-  address is treated as the sub_addr, and switched on that basis.
 */
 
-#include "ADG2128.h"
+#include <Wire.h>
+#include <ADG2128.h>
 
 
-static const uint8_t readback_addr[24] = {
-  0x34, 0, 0x3c, 0, 0x74, 0, 0x7c, 0,
-  0x35, 0, 0x3d, 0, 0x75, 0, 0x7d, 0,
-  0x36, 0, 0x3e, 0, 0x76, 0, 0x7e, 0
+static const uint8_t readback_addr[12] = {
+  0x34, 0x3c, 0x74, 0x7c, 0x35, 0x3d, 0x75, 0x7d, 0x36, 0x3e, 0x76, 0x7e
 };
 
 
 /*
-* Constructor. 
+* Constructor.
 */
-ADG2128::ADG2128(const ADG2128Opts* _o) : I2CDevice(_o->addr), _opts(_o) {
-  preserve_state_on_destroy = false;
+ADG2128::ADG2128(const ADG2128Opts* _o) : _opts(_o) {
   dev_init = false;
 }
 
 ADG2128::~ADG2128() {
-  if (!preserve_state_on_destroy) {
-    //reset();  TODO: This will crash when the async i2c opts callback.
+  if (255 != _opts.rst) {
+    digitalWrite(_opts.rst, 0);  // Leave the part in reset state.
   }
 }
 
@@ -51,15 +46,13 @@ ADG2128::~ADG2128() {
 *
 */
 ADG2128_ERROR ADG2128::init() {
-  for (int i = 0; i < 12; i++) {
-    if (readback(i) != ADG2128_ERROR::NO_ERROR) {
-      dev_init = false;
-      #ifdef MANUVR_DEBUG
-        Kernel::log("Failed to init switch.\n");
-      #endif
-      return ADG2128_ERROR::BUS;
-    }
+  _ll_pin_init();
+  if (0 != _read_device()) {
+    dev_init = false;
+    Serial.print("Failed to init switch.\n");
+    return ADG2128_ERROR::BUS;
   }
+  dev_init = true;
   return ADG2128_ERROR::NO_ERROR;
 }
 
@@ -105,16 +98,9 @@ ADG2128_ERROR ADG2128::changeRoute(uint8_t col, uint8_t row, bool sw_closed, boo
   uint8_t temp;
   ADG2128_ERROR return_value = compose_first_byte(col, row, sw_closed, &temp);
   if (ADG2128_ERROR::NO_ERROR == return_value) {
-    return_value = ADG2128_ERROR::NO_MEM;
-    uint8_t* buf = (uint8_t*) malloc(2);  // The awfulness, part 1.
-    if (nullptr != buf) {
-      *(buf + 0) = temp;
-      *(buf + 1) = defer ? 0 : 1;
+    return_value = ADG2128_ERROR::BUS;
+    if (0 == _write_device(temp, (defer ? 0 : 1))) {
       return_value = ADG2128_ERROR::NO_ERROR;
-      if (!writeX(-1, 2, buf)) {
-        return_value = ADG2128_ERROR::BUS;
-        free(buf);
-      }
     }
   }
   return return_value;
@@ -124,12 +110,14 @@ ADG2128_ERROR ADG2128::changeRoute(uint8_t col, uint8_t row, bool sw_closed, boo
 /*
 * Opens all switches.
 * Uses hardware reset if possible. Otherwise, will write each of the 96 switches
-*   one by one. This will have a non-trivial heap load unless it is re-worked.
+*   one by one. This will have a non-trivial time load unless it is re-worked.
 */
 ADG2128_ERROR ADG2128::reset() {
   if (255 != _opts.rst) {
-    _opts.reset(false);
-    _opts.reset(true);
+    digitalWrite(_opts.rst, 0);
+    delay(10);
+    digitalWrite(_opts.rst, 1);
+    delay(10);
   }
   else {
     for (int i = 0; i < 12; i++) {
@@ -149,17 +137,19 @@ ADG2128_ERROR ADG2128::reset() {
 
 /*
 * Readback on this part is organized by rows, with the return bits
-* being the state of the switches to the corresponding column.
+*   being the state of the switches to the corresponding column.
 * The readback address table is hard-coded in the readback_addr array.
 *
 *
 */
-ADG2128_ERROR ADG2128::readback(uint8_t row) {
-  if (row > 11) return ADG2128_ERROR::BAD_ROW;
-
-  ADG2128_ERROR return_value = ADG2128_ERROR::BUS;
-  if (writeX(-1, 2, (uint8_t*) &readback_addr[row << 1])) {
-    return_value = ADG2128_ERROR::NO_ERROR;
+int8_t ADG2128::_read_device() {
+  int8_t return_value = -1;
+  for (uint8_t row = 0; row < 12; row++) {
+    if (0 == _write_device(readback_addr[row], 0)) {
+      Wire.requestFrom(_opts.addr, (uint8_t) 1);
+      _values[row] = Wire.receive();
+      return_value = 0;
+    }
   }
   return return_value;
 }
@@ -167,90 +157,49 @@ ADG2128_ERROR ADG2128::readback(uint8_t row) {
 
 uint8_t ADG2128::getValue(uint8_t row) {
   if (row > 11) return 0;
-  return _values[row] >> 8;
+  return _values[row];
 }
 
 
-
-/*******************************************************************************
-* ___     _       _                      These members are mandatory overrides
-*  |   / / \ o   | \  _     o  _  _      for implementing I/O callbacks. They
-* _|_ /  \_/ o   |_/ (/_ \/ | (_ (/_     are also implemented by Adapters.
-*******************************************************************************/
-
-int8_t ADG2128::io_op_callback(BusOp* op) {
-  I2CBusOp* completed = (I2CBusOp*) op;
-  uint8_t byte0 = *(completed->buf+0);
-  //uint8_t byte1 = *(completed->buf+1);
-
-  switch (completed->get_opcode()) {
-    case BusOpcode::RX:
-      // We just read back data from the switch. Nothing needs to be done here.
-      // Any read on one of our 16-bit subaddresses that is not a failure will
-      //   be construed as evidence that the device exists.
-      if (!completed->hasFault()) {
-        dev_init = true;
-      }
-      break;
-    case BusOpcode::TX:
-      {
-        uint8_t  s_col   = byte0 & 0x07;
-        int8_t   s_row   = -1;
-        bool     s_set   = (0 != (byte0 & 0x80));
-        switch (byte0) {
-          case 0x7e:  s_row++;
-          case 0x76:  s_row++;
-          case 0x3e:  s_row++;
-          case 0x36:  s_row++;
-          case 0x7d:  s_row++;
-          case 0x75:  s_row++;
-          case 0x3d:  s_row++;
-          case 0x35:  s_row++;
-          case 0x7c:  s_row++;
-          case 0x74:  s_row++;
-          case 0x3c:  s_row++;
-          case 0x34:  s_row++;
-            // We just wrote the readback address. Now we need to get two bytes.
-            readX(-1, 2, (uint8_t*) &_values[s_row]);
-            break;
-          default:
-            if (!completed->hasFault()) {
-              // We just confirmed a write to the switch. Set the appropriate bit.
-              dev_init = true;
-              // TODO: TX ops of this class use the heap. This is terrible.
-              free(completed->buf);  // The awfulness, part 2.
-              completed->buf = nullptr;
-              s_row = ((byte0 >> 3) & 0x0F) % 12;  // Modulus is costly, but safer.
-              _values[s_row] = s_set ? (_values[s_row] | (1 << (s_col+8))) : (_values[s_row] & ~(1 << (s_col+8)));
-            }
-            else {
-              Kernel::log("An i2c operation requested by the ADG2128 came back failed.\n");
-            }
-            break;
-        }
-      }
-      break;
-    default:
-      break;
+/*
+* Setup the low-level pin details.
+*/
+int8_t ADG2128::_ll_pin_init() {
+  if (255 != _opts.rst) {
+    pinMode(_opts.rst, OUTPUT);
+    digitalWrite(_opts.rst, 0);  // Start part in reset state.
+    return 0;
   }
-  return 0;
+  return -1;
+}
+
+
+int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
+  int8_t return_value = -1;
+  Wire.beginTransmission(_opts.addr);
+  Wire.write(conn);
+  Wire.endTransmission();
+  _values[row] = conn;
+  return_value = 0;
+  return return_value;
 }
 
 
 /*
 * Dump this item to the dev log.
 */
-void ADG2128::printDebug(StringBuilder* output) {
-  output->concat("ADG2128 8x12 cross-point switch");
-  output->concat(PRINT_DIVIDER_1_STR);
-  I2CDevice::printDebug(output);
+void ADG2128::printDebug() {
+  Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
   if (dev_init) {
     for (int i = 0; i < 12; i++) {
-      output->concatf("\t Row %d: %u\n", i, _values[i]);
+      Serial.print("\t Row ");
+      Serial.println(i, DEC);
+      Serial.print("\t");
+      Serial.println(_values[i], DEC);
     }
   }
   else {
-    output->concat("\t Not initialized.\n");
+    Serial.print("\t Not initialized.\n");
   }
-  output->concat("\n");
+  Serial.print("\n");
 }

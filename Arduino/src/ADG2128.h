@@ -21,23 +21,18 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-*/                                     
+*/
 
 #ifndef ADG2128_CROSSPOINT_H
 #define ADG2128_CROSSPOINT_H
 
 #include <inttypes.h>
+#include <Arduino.h>
+#include <stdlib.h>
 
-#ifdef ARDUINO                          
-  #include "Arduino.h"
-#else
-  #include <stdio.h>
-  #include <stdlib.h>
-#endif
-                    
 #define ADG2128_DEFAULT_I2C_ADDR   0x27
 
-                    
+
 enum class ADG2128_ERROR : int8_t {
   NO_ERROR           = 0,   // There was no error.
   ABSENT             = -1,  // The ADG2128 appears to not be connected to the bus.
@@ -68,13 +63,6 @@ class ADG2128Opts {
 
     ADG2128Opts(uint8_t _addr, uint8_t _rst, bool _mc_r, bool _mr_c) :
       addr(_addr), rst(_rst), many_c_per_r(_mc_r), many_r_per_c(_mr_c) {};
-
-    inline bool reset(bool nu) const {
-      if (255 != rst) setPin(rst, nu);
-      return true;
-    };
-
-  private:
 };
 
 
@@ -87,9 +75,7 @@ class ADG2128 {
     ADG2128(const ADG2128Opts*);
     ~ADG2128();
 
-    /* Overrides from I2CDevice... */
-    int8_t io_op_callback(BusOp*);
-    void printDebug(StringBuilder*);
+    void printDebug();
 
     ADG2128_ERROR init();                                // Perform bus-related init tasks.
     ADG2128_ERROR reset();                               // Resets the entire device.
@@ -109,12 +95,17 @@ class ADG2128 {
 
   private:
     const ADG2128Opts _opts;
-    uint16_t _values[12];
+    uint8_t _values[12];
     bool dev_init;
     bool preserve_state_on_destroy;
 
-    ADG2128_ERROR readback(uint8_t row);
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
     ADG2128_ERROR enforce_cardinality(uint8_t col, uint8_t row);
+
+    int8_t _ll_pin_init();
+
+    int8_t _read_device();
+    int8_t _write_device(uint8_t row, uint8_t conn);
 };
+
 #endif    // ADG2128_CROSSPOINT_H
