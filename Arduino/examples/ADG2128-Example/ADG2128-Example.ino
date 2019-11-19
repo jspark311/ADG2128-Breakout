@@ -3,7 +3,7 @@
 
 
 ADG2128Opts switch_opts(
-  0x27,    // i2c address
+  0x70,    // i2c address
   13,      // Use this pin for reset
   true,    // Allow many columns to connect to a single row
   false    // Disallow many rows from connecting to a single column

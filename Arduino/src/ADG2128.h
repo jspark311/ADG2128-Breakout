@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <Arduino.h>
 #include <stdlib.h>
 
-#define ADG2128_DEFAULT_I2C_ADDR   0x27
+#define ADG2128_DEFAULT_I2C_ADDR   0x70
 
 
 enum class ADG2128_ERROR : int8_t {
