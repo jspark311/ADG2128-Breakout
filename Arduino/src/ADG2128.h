@@ -46,42 +46,22 @@ enum class ADG2128_ERROR : int8_t {
 
 
 /*
-* Options for the ADG2128
-*/
-class ADG2128Opts {
-  public:
-    const uint8_t addr;      // The device address on the i2c bus
-    const uint8_t rst;       // ADG2128 reset pin
-    const bool    many_c_per_r;  // Should 1<row>:many<cols> be allowed?
-    const bool    many_r_per_c;  // Should 1<col>:many<rows> be allowed?
-
-    ADG2128Opts(const ADG2128Opts* p) :
-      addr(p->addr),
-      rst(p->rst),
-      many_c_per_r(p->many_c_per_r),
-      many_r_per_c(p->many_r_per_c) {};
-
-    ADG2128Opts(uint8_t _addr, uint8_t _rst, bool _mc_r, bool _mr_c) :
-      addr(_addr), rst(_rst), many_c_per_r(_mc_r), many_r_per_c(_mr_c) {};
-};
-
-
-/*
 * This class represents an Analog Devices ADG2128 8x12 analog cross-point switch. This switch is controlled via i2c.
 * The 8-pin group are the columns, and the 12-pin group are rows.
 */
 class ADG2128 {
   public:
-    ADG2128(const ADG2128Opts*);
+    ADG2128(const uint8_t addr, const uint8_t rst_pin);
     ~ADG2128();
 
     void printDebug();
 
-    ADG2128_ERROR init();                                // Perform bus-related init tasks.
-    ADG2128_ERROR reset();                               // Resets the entire device.
+    ADG2128_ERROR init();      // Perform bus-related init tasks.
+    ADG2128_ERROR reset();     // Resets the entire device.
+    ADG2128_ERROR refresh();   // Forces a shadow refresh from hardware.
+
 
     /* Functions for manipulating individual switches. */
-
     ADG2128_ERROR changeRoute(uint8_t col, uint8_t row, bool sw_closed, bool defer);
     ADG2128_ERROR setRoute(uint8_t col, uint8_t row, bool defer = false);
     ADG2128_ERROR unsetRoute(uint8_t col, uint8_t row, bool defer = false);
@@ -94,10 +74,14 @@ class ADG2128 {
 
 
   private:
-    const ADG2128Opts _opts;
+    const uint8_t _ADDR;      // The device address on the i2c bus
+    const uint8_t _RESET_PIN;    // ADG2128 reset pin
+    bool     many_c_per_r = true;   // Should 1<row>:many<cols> be allowed?
+    bool     many_r_per_c = false;  // Should 1<col>:many<rows> be allowed?
+    bool     dev_init     = false;
+    bool     pins_confd   = false;
+    bool     preserve_state_on_destroy = false;
     uint8_t _values[12];
-    bool dev_init;
-    bool preserve_state_on_destroy;
 
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
     ADG2128_ERROR enforce_cardinality(uint8_t col, uint8_t row);

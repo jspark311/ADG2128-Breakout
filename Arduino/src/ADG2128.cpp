@@ -31,13 +31,18 @@ static const uint8_t readback_addr[12] = {
 /*
 * Constructor.
 */
-ADG2128::ADG2128(const ADG2128Opts* _o) : _opts(_o) {
-  dev_init = false;
+ADG2128::ADG2128(const uint8_t i2c_addr, const uint8_t r_pin) : _ADDR(i2c_addr), _RESET_PIN(r_pin) {
+  for (uint8_t i = 0; i < 12; i++) {
+    _values[i] = 0;
+  }
 }
 
+/*
+* Destructor.
+*/
 ADG2128::~ADG2128() {
-  if (255 != _opts.rst) {
-    digitalWrite(_opts.rst, 0);  // Leave the part in reset state.
+  if (255 != _RESET_PIN) {
+    digitalWrite(_RESET_PIN, LOW);  // Leave the part in reset state.
   }
 }
 
@@ -46,24 +51,55 @@ ADG2128::~ADG2128() {
 *
 */
 ADG2128_ERROR ADG2128::init() {
-  _ll_pin_init();
-  if (0 != _read_device()) {
-    dev_init = false;
-    Serial.print("Failed to init switch.\n");
-    return ADG2128_ERROR::BUS;
+  if (!pins_confd) {
+    _ll_pin_init();
   }
-  dev_init = true;
-  return ADG2128_ERROR::NO_ERROR;
+  return reset();
+}
+
+
+/*
+* Opens all switches.
+* Uses hardware reset if possible. Otherwise, will write each of the 96 switches
+*   one by one. This will have a non-trivial time load unless it is re-worked.
+*/
+ADG2128_ERROR ADG2128::reset() {
+  dev_init = false;
+  if (255 != _RESET_PIN) {
+    digitalWrite(_RESET_PIN, LOW);
+    delay(10);
+    digitalWrite(_RESET_PIN, HIGH);
+    delay(10);
+  }
+  else {
+    for (int i = 0; i < 12; i++) {
+      for (int j = 0; j < 8; j++) {
+        // This will defer switch disconnect until the last write is completed.
+        // So if reset fails, the part will be in an indeterminate state, but
+        //   nothing will have changed in the switches.
+        if (ADG2128_ERROR::NO_ERROR != unsetRoute(j, i, !((11 == i) && (7 == j)))) {
+          return ADG2128_ERROR::BUS;
+        }
+      }
+    }
+  }
+
+  ADG2128_ERROR ret = ADG2128_ERROR::BUS;
+  if (0 == _read_device()) {
+    dev_init = true;
+    ret = ADG2128_ERROR::NO_ERROR;
+  }
+  return ret;
 }
 
 
 ADG2128_ERROR ADG2128::enforce_cardinality(uint8_t col, uint8_t row) {
   if (col > 7)  return ADG2128_ERROR::BAD_COLUMN;
   if (row > 11) return ADG2128_ERROR::BAD_ROW;
-  if (!_opts.many_c_per_r) {
+  if (!many_c_per_r) {
     // Check that the given row isn't already attached to a different col.
   }
-  if (!_opts.many_r_per_c) {
+  if (!many_r_per_c) {
     // Check that the given col isn't already attached to a different row.
   }
   return ADG2128_ERROR::NO_ERROR;
@@ -107,31 +143,8 @@ ADG2128_ERROR ADG2128::changeRoute(uint8_t col, uint8_t row, bool sw_closed, boo
 }
 
 
-/*
-* Opens all switches.
-* Uses hardware reset if possible. Otherwise, will write each of the 96 switches
-*   one by one. This will have a non-trivial time load unless it is re-worked.
-*/
-ADG2128_ERROR ADG2128::reset() {
-  if (255 != _opts.rst) {
-    digitalWrite(_opts.rst, 0);
-    delay(10);
-    digitalWrite(_opts.rst, 1);
-    delay(10);
-  }
-  else {
-    for (int i = 0; i < 12; i++) {
-      for (int j = 0; j < 8; j++) {
-        // This will defer switch disconnect until the last write is completed.
-        // So if reset fails, the part will be in an indeterminate state, but
-        //   nothing will have changed in the switches.
-        if (ADG2128_ERROR::NO_ERROR != unsetRoute(j, i, !((11 == i) && (7 == j)))) {
-          return ADG2128_ERROR::BUS;
-        }
-      }
-    }
-  }
-  return init();
+ADG2128_ERROR ADG2128::refresh() {
+  return (0 != _read_device()) ? ADG2128_ERROR::BUS : ADG2128_ERROR::NO_ERROR;
 }
 
 
@@ -139,19 +152,28 @@ ADG2128_ERROR ADG2128::reset() {
 * Readback on this part is organized by rows, with the return bits
 *   being the state of the switches to the corresponding column.
 * The readback address table is hard-coded in the readback_addr array.
-*
-*
 */
 int8_t ADG2128::_read_device() {
-  int8_t return_value = -1;
+  int8_t ret = 0;
   for (uint8_t row = 0; row < 12; row++) {
-    if (0 == _write_device(readback_addr[row], 0)) {
-      Wire.requestFrom(_opts.addr, (uint8_t) 1);
-      _values[row] = Wire.receive();
-      return_value = 0;
+    Wire.beginTransmission(_ADDR);
+    Wire.write(readback_addr[row]);
+    Wire.write(0);
+    if (0 == Wire.endTransmission()) {
+      uint8_t bytes = Wire.requestFrom(_ADDR, (uint8_t) 2);
+      if (2 == bytes) {
+        bytes = Wire.receive();
+        _values[row] = Wire.receive();
+      }
+      else {
+        return -2;
+      }
+    }
+    else {
+      return -1;
     }
   }
-  return return_value;
+  return ret;
 }
 
 
@@ -165,23 +187,24 @@ uint8_t ADG2128::getValue(uint8_t row) {
 * Setup the low-level pin details.
 */
 int8_t ADG2128::_ll_pin_init() {
-  if (255 != _opts.rst) {
-    pinMode(_opts.rst, OUTPUT);
-    digitalWrite(_opts.rst, 0);  // Start part in reset state.
-    return 0;
+  if (255 != _RESET_PIN) {
+    pinMode(_RESET_PIN, OUTPUT);
+    digitalWrite(_RESET_PIN, LOW);  // Start part in reset state.
   }
-  return -1;
+  pins_confd = true;
+  return 0;
 }
 
 
 int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
-  int8_t return_value = -1;
-  Wire.beginTransmission(_opts.addr);
+  Wire.beginTransmission(_ADDR);
+  Wire.write(row);
   Wire.write(conn);
-  Wire.endTransmission();
-  _values[row] = conn;
-  return_value = 0;
-  return return_value;
+  int8_t ret = Wire.endTransmission();
+  if (0 == ret) {
+    _values[row] = conn;
+  }
+  return ret;
 }
 
 
@@ -190,16 +213,21 @@ int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
 */
 void ADG2128::printDebug() {
   Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
+  Serial.print("\tInitialized:    ");
+  Serial.println(dev_init ? 'y' : 'n');
+  Serial.print("\tmany_c_per_r:   ");
+  Serial.println(many_c_per_r ? 'y' : 'n');
+  Serial.print("\tmany_r_per_c:   ");
+  Serial.println(many_r_per_c ? 'y' : 'n');
+  Serial.print("\tRESET_PIN:      ");
+  Serial.println(_RESET_PIN, DEC);
   if (dev_init) {
     for (int i = 0; i < 12; i++) {
-      Serial.print("\t Row ");
-      Serial.println(i, DEC);
+      Serial.print("\tRow ");
+      Serial.print(i, DEC);
       Serial.print("\t");
       Serial.println(_values[i], DEC);
     }
-  }
-  else {
-    Serial.print("\t Not initialized.\n");
   }
   Serial.print("\n");
 }
