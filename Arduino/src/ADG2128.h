@@ -38,10 +38,7 @@ enum class ADG2128_ERROR : int8_t {
   ABSENT             = -1,  // The ADG2128 appears to not be connected to the bus.
   BUS                = -2,  // Something went wrong with the i2c bus.
   BAD_COLUMN         = -3,  // Column was out-of-bounds.
-  BAD_ROW            = -4,  // Row was out-of-bounds.
-  NO_MEM             = -5,  // We needed a heap allocation and couldn't get it.
-  CARD_VIOLATION_COL = -6,  // Command would violate col cardinality constraint.
-  CARD_VIOLATION_ROW = -7   // Command would violate row cardinality constraint.
+  BAD_ROW            = -4   // Row was out-of-bounds.
 };
 
 
@@ -60,7 +57,6 @@ class ADG2128 {
     ADG2128_ERROR reset();     // Resets the entire device.
     ADG2128_ERROR refresh();   // Forces a shadow refresh from hardware.
 
-
     /* Functions for manipulating individual switches. */
     ADG2128_ERROR changeRoute(uint8_t col, uint8_t row, bool sw_closed, bool defer);
     ADG2128_ERROR setRoute(uint8_t col, uint8_t row, bool defer = false);
@@ -71,6 +67,8 @@ class ADG2128 {
     inline void preserveOnDestroy(bool x) {
       preserve_state_on_destroy = x;
     };
+
+    static const char* const errorToStr(ADG2128_ERROR);
 
 
   private:
@@ -84,10 +82,7 @@ class ADG2128 {
     uint8_t _values[12];
 
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
-    ADG2128_ERROR enforce_cardinality(uint8_t col, uint8_t row);
-
     int8_t _ll_pin_init();
-
     int8_t _read_device();
     int8_t _write_device(uint8_t row, uint8_t conn);
 };

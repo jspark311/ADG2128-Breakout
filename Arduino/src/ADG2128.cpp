@@ -27,6 +27,17 @@ static const uint8_t readback_addr[12] = {
   0x34, 0x3c, 0x74, 0x7c, 0x35, 0x3d, 0x75, 0x7d, 0x36, 0x3e, 0x76, 0x7e
 };
 
+const char* const ADG2128::errorToStr(ADG2128_ERROR err) {
+  switch (err) {
+    case ADG2128_ERROR::NO_ERROR:    return "NO_ERROR";
+    case ADG2128_ERROR::ABSENT:      return "ABSENT";
+    case ADG2128_ERROR::BUS:         return "BUS";
+    case ADG2128_ERROR::BAD_COLUMN:  return "BAD_COLUMN";
+    case ADG2128_ERROR::BAD_ROW:     return "BAD_ROW";
+    default:                         return "UNKNOWN";
+  }
+}
+
 
 /*
 * Constructor.
@@ -93,19 +104,6 @@ ADG2128_ERROR ADG2128::reset() {
 }
 
 
-ADG2128_ERROR ADG2128::enforce_cardinality(uint8_t col, uint8_t row) {
-  if (col > 7)  return ADG2128_ERROR::BAD_COLUMN;
-  if (row > 11) return ADG2128_ERROR::BAD_ROW;
-  if (!many_c_per_r) {
-    // Check that the given row isn't already attached to a different col.
-  }
-  if (!many_r_per_c) {
-    // Check that the given col isn't already attached to a different row.
-  }
-  return ADG2128_ERROR::NO_ERROR;
-}
-
-
 ADG2128_ERROR ADG2128::compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result) {
   if (col > 7)  return ADG2128_ERROR::BAD_COLUMN;
   if (row > 11) return ADG2128_ERROR::BAD_ROW;
@@ -117,11 +115,7 @@ ADG2128_ERROR ADG2128::compose_first_byte(uint8_t col, uint8_t row, bool set, ui
 
 
 ADG2128_ERROR ADG2128::setRoute(uint8_t col, uint8_t row, bool defer) {
-  ADG2128_ERROR return_value = enforce_cardinality(col, row);
-  if (ADG2128_ERROR::NO_ERROR == return_value) {
-    return_value = changeRoute(col, row, true, defer);
-  }
-  return return_value;
+  return changeRoute(col, row, true, defer);
 }
 
 
@@ -213,10 +207,6 @@ void ADG2128::printDebug() {
   Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
   Serial.print("\tInitialized:    ");
   Serial.println(dev_init ? 'y' : 'n');
-  Serial.print("\tmany_c_per_r:   ");
-  Serial.println(many_c_per_r ? 'y' : 'n');
-  Serial.print("\tmany_r_per_c:   ");
-  Serial.println(many_r_per_c ? 'y' : 'n');
   Serial.print("\tRESET_PIN:      ");
   Serial.println(_RESET_PIN, DEC);
   if (dev_init) {
