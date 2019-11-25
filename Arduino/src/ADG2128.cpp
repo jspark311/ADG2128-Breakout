@@ -136,6 +136,7 @@ ADG2128_ERROR ADG2128::changeRoute(uint8_t col, uint8_t row, bool sw_closed, boo
   if (ADG2128_ERROR::NO_ERROR == return_value) {
     return_value = ADG2128_ERROR::BUS;
     if (0 == _write_device(temp, (defer ? 0 : 1))) {
+      _values[row] = (sw_closed) ? (_values[row] | (1 << col)) : (_values[row] & ~(1 << col));
       return_value = ADG2128_ERROR::NO_ERROR;
     }
   }
@@ -201,9 +202,6 @@ int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
   Wire.write(row);
   Wire.write(conn);
   int8_t ret = Wire.endTransmission();
-  if (0 == ret) {
-    _values[row] = conn;
-  }
   return ret;
 }
 
