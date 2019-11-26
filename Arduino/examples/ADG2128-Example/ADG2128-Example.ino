@@ -69,8 +69,8 @@ void printUIState() {
 
 void setup() {
   Serial.begin(115200);
-  Wire.setSDA(18);
-  Wire.setSCL(19);
+  Wire.setSDA(SDA_PIN);
+  Wire.setSCL(SCL_PIN);
   Wire.begin();
   adg2128.init();
 }
