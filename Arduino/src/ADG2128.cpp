@@ -52,7 +52,7 @@ ADG2128::ADG2128(const uint8_t i2c_addr, const uint8_t r_pin) : _ADDR(i2c_addr),
 * Constructor.
 */
 ADG2128::ADG2128(const uint8_t* buf, const unsigned int len) : _ADDR(*(buf + 1)), _RESET_PIN(*(buf + 2)) {
-  _unserialize(buf, len);
+  unserialize(buf, len);
 }
 
 /*
@@ -170,7 +170,7 @@ ADG2128_ERROR ADG2128::unsetRoute(uint8_t col, uint8_t row, bool defer) {
 */
 uint8_t ADG2128::serialize(uint8_t* buf, unsigned int len) {
   uint8_t offset = 0;
-  if (len >= 17) {
+  if (len >= ADG2128_SERIALIZE_SIZE) {
     if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
       uint16_t f = _flags & ADG2128_FLAG_SERIAL_MASK;
       *(buf + offset++) = ADG2128_SERIALIZE_VERSION;
@@ -187,16 +187,18 @@ uint8_t ADG2128::serialize(uint8_t* buf, unsigned int len) {
 }
 
 
-int8_t ADG2128::_unserialize(const uint8_t* buf, const unsigned int len) {
+int8_t ADG2128::unserialize(const uint8_t* buf, const unsigned int len) {
   uint8_t offset = 0;
-  if (len >= 16) {
+  uint8_t expected_sz = 255;
+  if (len >= ADG2128_SERIALIZE_SIZE) {
     uint16_t f = 0;
     uint8_t vals[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     switch (*(buf + offset++)) {
       case ADG2128_SERIALIZE_VERSION:
+        expected_sz = ADG2128_SERIALIZE_SIZE;
         offset += 4;  // We'll have already constructed with these.
         f = (*(buf + 3) << 8) | *(buf + 4);
-        _flags = _flags | (f & ADG2128_FLAG_SERIAL_MASK);
+        _flags = (_flags & ~ADG2128_FLAG_SERIAL_MASK) | (f & ADG2128_FLAG_SERIAL_MASK);
         for (uint8_t i = 0; i < 12; i++) {
           vals[i] = *(buf + offset++);
         }
@@ -226,7 +228,7 @@ int8_t ADG2128::_unserialize(const uint8_t* buf, const unsigned int len) {
       }
     }
   }
-  return (17 == offset) ? 0 : -1;
+  return (expected_sz == offset) ? 0 : -1;
 }
 
 

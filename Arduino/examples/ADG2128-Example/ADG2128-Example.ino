@@ -40,6 +40,7 @@ void printHelp() {
   Serial.print("x     Refresh register shadows\n");
   Serial.print("I     Reinitialize\n");
   Serial.print("R     Reset\n");
+  Serial.print("S     Serialize\n");
   Serial.print("r     Close route between selected column and row.\n");
   Serial.print("u     Open route between selected column and row.\n");
   if (row_col_opt) {
@@ -113,6 +114,25 @@ void loop() {
       case 's':
         row_col_opt = !row_col_opt;
         printUIState();
+        break;
+      case 'S':   // Save the state into a buffer for later reconstitution.
+        {
+          uint8_t buffer[ADG2128_SERIALIZE_SIZE];
+          uint8_t written = adg2128.serialize(buffer, ADG2128_SERIALIZE_SIZE);
+          if (ADG2128_SERIALIZE_SIZE == written) {
+            for (uint8_t i = 0; i < ADG2128_SERIALIZE_SIZE; i++) {
+              Serial.print(buffer[i], HEX);
+              Serial.print(" ");
+            }
+            Serial.println();
+          }
+          else {
+            Serial.print("serialize() returns ");
+            Serial.print(written);
+            Serial.print(". Was expecting ");
+            Serial.println(ADG2128_SERIALIZE_SIZE);
+          }
+        }
         break;
 
       case '0':

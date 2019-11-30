@@ -76,6 +76,7 @@ class ADG2128 {
     ADG2128_ERROR setRoute(uint8_t col, uint8_t row, bool defer = false);
     ADG2128_ERROR unsetRoute(uint8_t col, uint8_t row, bool defer = false);
     uint8_t serialize(uint8_t* buf, unsigned int len);
+    int8_t  unserialize(const uint8_t* buf, const unsigned int len);
     uint8_t getValue(uint8_t row);
 
     inline bool initialized() {  return _adg_flag(ADG2128_FLAG_INITIALIZED);  };
@@ -97,7 +98,6 @@ class ADG2128 {
 
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
     int8_t _ll_pin_init();
-    int8_t _unserialize(const uint8_t* buf, const unsigned int len);
     int8_t _read_device();
     int8_t _write_device(uint8_t row, uint8_t conn);
 
