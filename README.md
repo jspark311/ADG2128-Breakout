@@ -32,7 +32,7 @@ setting preserveOnDestroy(true) ahead of `init()`, like so...
     adg2128.init(&Wire);
 
 Since `init()` will also call `reset()` by default, preserveOnDestroy must be
-enabled prior to `init()` to achieve the desired result (both sides of the drive life cycle).
+enabled prior to `init()` to achieve the desired result (both sides of the driver life cycle).
 
 #### Throwing many switches at once
 
