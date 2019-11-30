@@ -73,6 +73,13 @@ void setup() {
   Wire.setSDA(SDA_PIN);
   Wire.setSCL(SCL_PIN);
   Wire.begin();
+
+  // Calling preserveOnDestroy(true) ahead of init() will prevent the class from
+  //   resetting the switch on either init() or class teardown.
+  // The switch does not have non-volatile storage, so if the state is to be
+  //   rebuilt after a power loss or reset(), the state will need to be
+  //   serialized and initialized later with the resuling buffer.
+  // adg2128.preserveOnDestroy(true);
   adg2128.init(&Wire);
 }
 
