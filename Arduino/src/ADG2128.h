@@ -27,8 +27,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define ADG2128_CROSSPOINT_H
 
 #include <inttypes.h>
-#include <Arduino.h>
 #include <stdlib.h>
+#include <Arduino.h>
+#include <Wire.h>
 
 #define ADG2128_DEFAULT_I2C_ADDR    0x70
 #define ADG2128_SERIALIZE_VERSION   0x01
@@ -67,7 +68,8 @@ class ADG2128 {
 
     void printDebug();
 
-    ADG2128_ERROR init();      // Perform bus-related init tasks.
+    inline ADG2128_ERROR init() {  return init(_bus);  };
+    ADG2128_ERROR init(TwoWire*); // Perform bus-related init tasks.
     ADG2128_ERROR reset();     // Resets the entire device.
     ADG2128_ERROR refresh();   // Forces a shadow refresh from hardware.
 
@@ -94,7 +96,8 @@ class ADG2128 {
     const uint8_t _ADDR;       // The device address on the i2c bus
     const uint8_t _RESET_PIN;  // ADG2128 reset pin
     uint16_t _flags = 0;       // Class flags.
-    uint8_t _values[12];
+    TwoWire* _bus   = nullptr;
+    uint8_t  _values[12];
 
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
     int8_t _ll_pin_init();

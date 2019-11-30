@@ -19,7 +19,6 @@ limitations under the License.
 
 */
 
-#include <Wire.h>
 #include <ADG2128.h>
 
 
@@ -68,9 +67,12 @@ ADG2128::~ADG2128() {
 /*
 *
 */
-ADG2128_ERROR ADG2128::init() {
+ADG2128_ERROR ADG2128::init(TwoWire* b) {
   if (!_adg_flag(ADG2128_FLAG_PINS_CONFD)) {
     _ll_pin_init();
+  }
+  if (nullptr != b) {
+    _bus = b;
   }
 
   if (_from_blob()) {
@@ -257,26 +259,28 @@ ADG2128_ERROR ADG2128::refresh() {
 * The readback address table is hard-coded in the readback_addr array.
 */
 int8_t ADG2128::_read_device() {
-  int8_t ret = 0;
-  for (uint8_t row = 0; row < 12; row++) {
-    Wire.beginTransmission(_ADDR);
-    Wire.write(readback_addr[row]);
-    Wire.write(0);
-    if (0 == Wire.endTransmission()) {
-      uint8_t bytes = Wire.requestFrom(_ADDR, (uint8_t) 2);
-      if (2 == bytes) {
-        bytes = Wire.receive();
-        _values[row] = Wire.receive();
+  int8_t ret = -3;
+  if (nullptr != _bus) {
+    for (uint8_t row = 0; row < 12; row++) {
+      _bus->beginTransmission(_ADDR);
+      _bus->write(readback_addr[row]);
+      _bus->write(0);
+      if (0 == _bus->endTransmission()) {
+        uint8_t bytes = _bus->requestFrom(_ADDR, (uint8_t) 2);
+        if (2 == bytes) {
+          bytes = _bus->receive();
+          _values[row] = _bus->receive();
+        }
+        else {
+          return -2;
+        }
       }
       else {
-        return -2;
+        return -1;
       }
     }
-    else {
-      return -1;
-    }
+    _adg_set_flag(ADG2128_FLAG_INITIALIZED);
   }
-  _adg_set_flag(ADG2128_FLAG_INITIALIZED);
   return ret;
 }
 
@@ -301,10 +305,13 @@ int8_t ADG2128::_ll_pin_init() {
 
 
 int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
-  Wire.beginTransmission(_ADDR);
-  Wire.write(row);
-  Wire.write(conn);
-  int8_t ret = Wire.endTransmission();
+  int8_t ret = -6;
+  if (nullptr != _bus) {
+    _bus->beginTransmission(_ADDR);
+    _bus->write(row);
+    _bus->write(conn);
+    ret = _bus->endTransmission();
+  }
   return ret;
 }
 

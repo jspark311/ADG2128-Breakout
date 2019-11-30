@@ -73,7 +73,7 @@ void setup() {
   Wire.setSDA(SDA_PIN);
   Wire.setSCL(SCL_PIN);
   Wire.begin();
-  adg2128.init();
+  adg2128.init(&Wire);
 }
 
 
