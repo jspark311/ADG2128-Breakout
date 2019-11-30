@@ -49,10 +49,17 @@ ADG2128::ADG2128(const uint8_t i2c_addr, const uint8_t r_pin) : _ADDR(i2c_addr),
 }
 
 /*
+* Constructor.
+*/
+ADG2128::ADG2128(const uint8_t* buf, const unsigned int len) : _ADDR(*(buf + 1)), _RESET_PIN(*(buf + 2)) {
+  _unserialize(buf, len);
+}
+
+/*
 * Destructor.
 */
 ADG2128::~ADG2128() {
-  if (255 != _RESET_PIN) {
+  if (!preserveOnDestroy() && (255 != _RESET_PIN)) {
     digitalWrite(_RESET_PIN, LOW);  // Leave the part in reset state.
   }
 }
@@ -62,10 +69,36 @@ ADG2128::~ADG2128() {
 *
 */
 ADG2128_ERROR ADG2128::init() {
-  if (!pins_confd) {
+  if (!_adg_flag(ADG2128_FLAG_PINS_CONFD)) {
     _ll_pin_init();
   }
-  return reset();
+
+  if (_from_blob()) {
+    // Copy the blob-imparted values and clear the flag so we don't do this again.
+    _adg_clear_flag(ADG2128_FLAG_FROM_BLOB);
+    uint8_t vals[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    for (uint8_t i = 0; i < 12; i++) {  vals[i] = _values[i];  }
+    for (uint8_t i = 0; i < 12; i++) {
+      uint8_t row_val = vals[i];
+      for (uint8_t j = 0; j < 8; j++) {
+        // This will defer switch disconnect until the last write is completed.
+        // So if reset fails, the part will be in an indeterminate state, but
+        //   nothing will have changed in the switches.
+        row_val = row_val >> j;
+        if (ADG2128_ERROR::NO_ERROR != changeRoute(j, i, (row_val & 1), !((11 == i) && (7 == j)))) {
+          return ADG2128_ERROR::BUS;
+        }
+      }
+    }
+    _adg_set_flag(ADG2128_FLAG_INITIALIZED);
+    return ADG2128_ERROR::NO_ERROR;
+  }
+  else {
+    if (!preserveOnDestroy()) {
+      return reset();
+    }
+    return (0 == _read_device()) ? ADG2128_ERROR::NO_ERROR : ADG2128_ERROR::BUS;
+  }
 }
 
 
@@ -75,7 +108,7 @@ ADG2128_ERROR ADG2128::init() {
 *   one by one. This will have a non-trivial time load unless it is re-worked.
 */
 ADG2128_ERROR ADG2128::reset() {
-  dev_init = false;
+  _adg_clear_flag(ADG2128_FLAG_INITIALIZED);
   if (255 != _RESET_PIN) {
     digitalWrite(_RESET_PIN, LOW);
     delay(10);
@@ -94,10 +127,8 @@ ADG2128_ERROR ADG2128::reset() {
       }
     }
   }
-
   ADG2128_ERROR ret = ADG2128_ERROR::BUS;
   if (0 == _read_device()) {
-    dev_init = true;
     ret = ADG2128_ERROR::NO_ERROR;
   }
   return ret;
@@ -121,6 +152,81 @@ ADG2128_ERROR ADG2128::setRoute(uint8_t col, uint8_t row, bool defer) {
 
 ADG2128_ERROR ADG2128::unsetRoute(uint8_t col, uint8_t row, bool defer) {
   return changeRoute(col, row, false, defer);
+}
+
+
+/*
+* Stores everything about the class in the provided buffer in this format...
+*   Offset | Data
+*   -------|----------------------
+*   0      | Serializer version
+*   1      | i2c address
+*   2      | Reset pin
+*   3      | Flags MSB
+*   4      | Flags LSB
+*   5-16   | Switch configuration
+*
+* Returns the number of bytes written to the buffer.
+*/
+uint8_t ADG2128::serialize(uint8_t* buf, unsigned int len) {
+  uint8_t offset = 0;
+  if (len >= 17) {
+    if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
+      uint16_t f = _flags & ADG2128_FLAG_SERIAL_MASK;
+      *(buf + offset++) = ADG2128_SERIALIZE_VERSION;
+      *(buf + offset++) = _ADDR;
+      *(buf + offset++) = _RESET_PIN;
+      *(buf + offset++) = (uint8_t) 0xFF & (f >> 8);
+      *(buf + offset++) = (uint8_t) 0xFF & f;
+      for (uint8_t i = 0; i < 12; i++) {
+        *(buf + offset++) = _values[i];
+      }
+    }
+  }
+  return offset;
+}
+
+
+int8_t ADG2128::_unserialize(const uint8_t* buf, const unsigned int len) {
+  uint8_t offset = 0;
+  if (len >= 16) {
+    uint16_t f = 0;
+    uint8_t vals[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    switch (*(buf + offset++)) {
+      case ADG2128_SERIALIZE_VERSION:
+        offset += 4;  // We'll have already constructed with these.
+        f = (*(buf + 3) << 8) | *(buf + 4);
+        _flags = _flags | (f & ADG2128_FLAG_SERIAL_MASK);
+        for (uint8_t i = 0; i < 12; i++) {
+          vals[i] = *(buf + offset++);
+        }
+        break;
+      default:  // Unhandled serializer version.
+        return -1;
+    }
+    if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
+      // If the device has already been initialized, we impart the new conf.
+      for (uint8_t i = 0; i < 12; i++) {
+        uint8_t row_val = vals[i];
+        for (uint8_t j = 0; j < 8; j++) {
+          // This will defer switch disconnect until the last write is completed.
+          // So if reset fails, the part will be in an indeterminate state, but
+          //   nothing will have changed in the switches.
+          row_val = row_val >> j;
+          if (ADG2128_ERROR::NO_ERROR != changeRoute(j, i, (row_val & 1), !((11 == i) && (7 == j)))) {
+            return -2;
+          }
+        }
+      }
+    }
+    else {
+      _adg_set_flag(ADG2128_FLAG_FROM_BLOB);
+      for (uint8_t i = 0; i < 12; i++) {
+        _values[i] = vals[i];   // Save state for init()
+      }
+    }
+  }
+  return (17 == offset) ? 0 : -1;
 }
 
 
@@ -168,6 +274,7 @@ int8_t ADG2128::_read_device() {
       return -1;
     }
   }
+  _adg_set_flag(ADG2128_FLAG_INITIALIZED);
   return ret;
 }
 
@@ -186,7 +293,7 @@ int8_t ADG2128::_ll_pin_init() {
     pinMode(_RESET_PIN, OUTPUT);
     digitalWrite(_RESET_PIN, LOW);  // Start part in reset state.
   }
-  pins_confd = true;
+  _adg_set_flag(ADG2128_FLAG_PINS_CONFD);
   return 0;
 }
 
@@ -206,10 +313,10 @@ int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
 void ADG2128::printDebug() {
   Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
   Serial.print("\tInitialized:    ");
-  Serial.println(dev_init ? 'y' : 'n');
+  Serial.println(_adg_flag(ADG2128_FLAG_INITIALIZED) ? 'y' : 'n');
   Serial.print("\tRESET_PIN:      ");
   Serial.println(_RESET_PIN, DEC);
-  if (dev_init) {
+  if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
     for (int i = 0; i < 12; i++) {
       Serial.print("\tRow ");
       Serial.print(i, DEC);

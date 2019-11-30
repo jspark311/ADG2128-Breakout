@@ -30,7 +30,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <Arduino.h>
 #include <stdlib.h>
 
-#define ADG2128_DEFAULT_I2C_ADDR   0x70
+#define ADG2128_DEFAULT_I2C_ADDR    0x70
+#define ADG2128_SERIALIZE_VERSION   0x01
+#define ADG2128_SERIALIZE_SIZE        17
+
+
+/* Class flags. */
+#define ADG2128_FLAG_INITIALIZED    0x0001
+#define ADG2128_FLAG_ALLOW_MR_TO_C  0x0002
+#define ADG2128_FLAG_ALLOW_R_TO_MC  0x0004
+#define ADG2128_FLAG_PRESERVE_STATE 0x0008
+#define ADG2128_FLAG_PINS_CONFD     0x0010
+#define ADG2128_FLAG_FROM_BLOB      0x0020
+
+#define ADG2128_FLAG_SERIAL_MASK    0x000E  // Only these bits are serialized.
 
 
 enum class ADG2128_ERROR : int8_t {
@@ -49,6 +62,7 @@ enum class ADG2128_ERROR : int8_t {
 class ADG2128 {
   public:
     ADG2128(const uint8_t addr, const uint8_t rst_pin);
+    ADG2128(const uint8_t* buf, const unsigned int len);
     ~ADG2128();
 
     void printDebug();
@@ -61,30 +75,43 @@ class ADG2128 {
     ADG2128_ERROR changeRoute(uint8_t col, uint8_t row, bool sw_closed, bool defer);
     ADG2128_ERROR setRoute(uint8_t col, uint8_t row, bool defer = false);
     ADG2128_ERROR unsetRoute(uint8_t col, uint8_t row, bool defer = false);
-
+    uint8_t serialize(uint8_t* buf, unsigned int len);
     uint8_t getValue(uint8_t row);
 
+    inline bool initialized() {  return _adg_flag(ADG2128_FLAG_INITIALIZED);  };
+    inline bool preserveOnDestroy() {
+      return _adg_flag(ADG2128_FLAG_PRESERVE_STATE);
+    };
     inline void preserveOnDestroy(bool x) {
-      preserve_state_on_destroy = x;
+      _adg_set_flag(ADG2128_FLAG_PRESERVE_STATE, x);
     };
 
     static const char* const errorToStr(ADG2128_ERROR);
 
 
   private:
-    const uint8_t _ADDR;      // The device address on the i2c bus
-    const uint8_t _RESET_PIN;    // ADG2128 reset pin
-    bool     many_c_per_r = true;   // Should 1<row>:many<cols> be allowed?
-    bool     many_r_per_c = false;  // Should 1<col>:many<rows> be allowed?
-    bool     dev_init     = false;
-    bool     pins_confd   = false;
-    bool     preserve_state_on_destroy = false;
+    const uint8_t _ADDR;       // The device address on the i2c bus
+    const uint8_t _RESET_PIN;  // ADG2128 reset pin
+    uint16_t _flags = 0;       // Class flags.
     uint8_t _values[12];
 
     ADG2128_ERROR compose_first_byte(uint8_t col, uint8_t row, bool set, uint8_t* result);
     int8_t _ll_pin_init();
+    int8_t _unserialize(const uint8_t* buf, const unsigned int len);
     int8_t _read_device();
     int8_t _write_device(uint8_t row, uint8_t conn);
+
+    inline bool _from_blob() {   return _adg_flag(ADG2128_FLAG_FROM_BLOB); };
+
+    /* Flag manipulation inlines */
+    inline uint16_t _adg_flags() {                return _flags;           };
+    inline bool _adg_flag(uint16_t _flag) {       return (_flags & _flag); };
+    inline void _adg_clear_flag(uint16_t _flag) { _flags &= ~_flag;        };
+    inline void _adg_set_flag(uint16_t _flag) {   _flags |= _flag;         };
+    inline void _adg_set_flag(uint16_t _flag, bool nu) {
+      if (nu) _flags |= _flag;
+      else    _flags &= ~_flag;
+    };
 };
 
 #endif    // ADG2128_CROSSPOINT_H
