@@ -270,6 +270,8 @@ int8_t ADG2128::_read_device() {
         if (2 == bytes) {
           bytes = _bus->receive();
           _values[row] = _bus->receive();
+          _adg_set_flag(ADG2128_FLAG_INITIALIZED);
+          ret = 0;
         }
         else {
           return -2;
@@ -279,7 +281,6 @@ int8_t ADG2128::_read_device() {
         return -1;
       }
     }
-    _adg_set_flag(ADG2128_FLAG_INITIALIZED);
   }
   return ret;
 }
