@@ -28,8 +28,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <inttypes.h>
 #include <stdlib.h>
-#include <Arduino.h>
-#include <Wire.h>
+#ifdef ARDUINO
+  #include "Arduino.h"
+  #include <Wire.h>
+#else
+#endif
 
 #define ADG2128_DEFAULT_I2C_ADDR    0x70
 #define ADG2128_SERIALIZE_VERSION   0x01
