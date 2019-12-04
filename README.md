@@ -20,6 +20,13 @@ A breakout board for Analog Devices' 8x12 analog cross-point switch
 
 ### Notes on driver features:
 
+#### Optional pins
+
+The reset pin is optional and must be tied high if not under software control.
+But it must still be passed as an argument to the constructor. If you have left the pin
+disconnected, pass 255 for that pin, and the class will behave in a manner to
+accommodate it (at the cost of time and complexity in the driver).
+
 #### Preserve-on-destroy
 
 When the driver instance for the switch is destroyed, the default behavior is to
@@ -33,6 +40,42 @@ setting preserveOnDestroy(true) ahead of `init()`, like so...
 
 Since `init()` will also call `reset()` by default, preserveOnDestroy must be
 enabled prior to `init()` to achieve the desired result (both sides of the driver life cycle).
+
+#### Preserving and restoring hardware states
+
+The driver provides a means of cloning prior states to and from a buffer.
+Possible reasons for doing this might be...
+
+  * Higher bus efficiency during `init()`.
+  * Major code savings, since you can skip configuring the hardware and the class with discrete function calls.
+
+Saving the current state can be done like this (from the example sketch)...
+
+    uint8_t buf[SX1503_SERIALIZE_SIZE];
+    uint8_t written = sx1503.serialize(buf, SX1503_SERIALIZE_SIZE);
+    if (SX1503_SERIALIZE_SIZE == written) {
+      // Everything worked. Do what you will with the buffer.
+    }
+
+Restoring the state from a buffer can be done either upon construction...
+
+    uint8_t buf[17] = {
+      0x01, 0x70, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    ADG2128 adg2128(buf, 17);
+
+...or after a successful `init()`...
+
+    // Literally anywhere in the sketch...
+    adg2128.unserialize(buf, 17);
+
+If done by construction, the configuration will be written to the class immediately,
+and to the hardware during `init()`.
+
+Invocation of `unserialize()` will immediately result in I/O as the new
+configuration is imparted, but the fields (if any) that are otherwise required for
+construction will be ignored.
 
 #### Throwing many switches at once
 
