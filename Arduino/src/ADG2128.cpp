@@ -68,6 +68,7 @@ ADG2128::~ADG2128() {
 *
 */
 ADG2128_ERROR ADG2128::init(TwoWire* b) {
+  _adg_clear_flag(ADG2128_FLAG_INITIALIZED);
   if (!_adg_flag(ADG2128_FLAG_PINS_CONFD)) {
     _ll_pin_init();
   }
@@ -198,9 +199,9 @@ int8_t ADG2128::unserialize(const uint8_t* buf, const unsigned int len) {
     switch (*(buf + offset++)) {
       case ADG2128_SERIALIZE_VERSION:
         expected_sz = ADG2128_SERIALIZE_SIZE;
-        offset += 4;  // We'll have already constructed with these.
         f = (*(buf + 3) << 8) | *(buf + 4);
         _flags = (_flags & ~ADG2128_FLAG_SERIAL_MASK) | (f & ADG2128_FLAG_SERIAL_MASK);
+        offset += 4;  // Skip to the register offset.
         for (uint8_t i = 0; i < 12; i++) {
           vals[i] = *(buf + offset++);
         }
