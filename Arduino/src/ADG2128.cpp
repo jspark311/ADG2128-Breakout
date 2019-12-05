@@ -174,7 +174,7 @@ ADG2128_ERROR ADG2128::unsetRoute(uint8_t col, uint8_t row, bool defer) {
 uint8_t ADG2128::serialize(uint8_t* buf, unsigned int len) {
   uint8_t offset = 0;
   if (len >= ADG2128_SERIALIZE_SIZE) {
-    if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
+    if (initialized()) {
       uint16_t f = _flags & ADG2128_FLAG_SERIAL_MASK;
       *(buf + offset++) = ADG2128_SERIALIZE_VERSION;
       *(buf + offset++) = _ADDR;
@@ -209,7 +209,7 @@ int8_t ADG2128::unserialize(const uint8_t* buf, const unsigned int len) {
       default:  // Unhandled serializer version.
         return -1;
     }
-    if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
+    if (initialized()) {
       // If the device has already been initialized, we impart the new conf.
       for (uint8_t i = 0; i < 12; i++) {
         uint8_t row_val = vals[i];
@@ -217,8 +217,7 @@ int8_t ADG2128::unserialize(const uint8_t* buf, const unsigned int len) {
           // This will defer switch disconnect until the last write is completed.
           // So if reset fails, the part will be in an indeterminate state, but
           //   nothing will have changed in the switches.
-          row_val = row_val >> j;
-          if (ADG2128_ERROR::NO_ERROR != changeRoute(j, i, (row_val & 1), !((11 == i) && (7 == j)))) {
+          if (ADG2128_ERROR::NO_ERROR != changeRoute(j, i, ((row_val >> j) & 1), !((11 == i) && (7 == j)))) {
             return -2;
           }
         }
@@ -324,15 +323,15 @@ int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
 void ADG2128::printDebug() {
   Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
   Serial.print("\tInitialized:    ");
-  Serial.println(_adg_flag(ADG2128_FLAG_INITIALIZED) ? 'y' : 'n');
+  Serial.println(initialized() ? 'y' : 'n');
   Serial.print("\tRESET_PIN:      ");
   Serial.println(_RESET_PIN, DEC);
-  if (_adg_flag(ADG2128_FLAG_INITIALIZED)) {
+  if (initialized()) {
     for (int i = 0; i < 12; i++) {
       Serial.print("\tRow ");
       Serial.print(i, DEC);
-      Serial.print("\t");
-      Serial.println(_values[i], DEC);
+      Serial.print("\t0x");
+      Serial.println(_values[i], HEX);
     }
   }
   Serial.print("\n");

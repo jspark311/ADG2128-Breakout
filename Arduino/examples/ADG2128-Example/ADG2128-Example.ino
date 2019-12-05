@@ -128,8 +128,9 @@ void loop() {
           uint8_t written = adg2128.serialize(buffer, ADG2128_SERIALIZE_SIZE);
           if (ADG2128_SERIALIZE_SIZE == written) {
             for (uint8_t i = 0; i < ADG2128_SERIALIZE_SIZE; i++) {
+              Serial.print((buffer[i] > 0x0F) ? "0x" : "0x0");
               Serial.print(buffer[i], HEX);
-              Serial.print(" ");
+              Serial.print(((i+1) % 12) ? " " : "\n");
             }
             Serial.println();
           }
