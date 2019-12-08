@@ -4,10 +4,17 @@ Author: J. Ian Lindsay
 Date:   2019.10.20
 */
 
+#define TEST_PROG_VERSION "v1.1"
+
+
 #include <Wire.h>
 #include <ADG2128.h>
-
-#define TEST_PROG_VERSION "v1.0"
+#if defined(ADG2128_DEBUG)
+  // If debugging is enabled in the build, another dependency will be needed.
+  // It can be disabled in the driver's header file.
+  // https://github.com/jspark311/CppPotpourri
+  #include <StringBuilder.h>
+#endif  // ADG2128_DEBUG
 
 
 /*******************************************************************************
@@ -36,7 +43,9 @@ void printHelp() {
   Serial.print(TEST_PROG_VERSION);
   Serial.print("\n------------------------------------\n");
   Serial.print("?     This output\n");
+  #if defined(ADG2128_DEBUG)
   Serial.print("i     ADG2128 info\n");
+  #endif
   Serial.print("x     Refresh register shadows\n");
   Serial.print("I     Reinitialize\n");
   Serial.print("R     Reset\n");
@@ -168,8 +177,16 @@ void loop() {
         }
         break;
 
-      case 'i':  adg2128.printDebug();  break;
       case '?':  printHelp();           break;
+      #if defined(ADG2128_DEBUG)
+      case 'i':
+        {
+          StringBuilder output;
+          adg2128.printDebug(&output);
+          Serial.print((char*) output.string());
+        }
+        break;
+      #endif
     }
   }
 }

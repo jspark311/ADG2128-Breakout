@@ -21,6 +21,11 @@ limitations under the License.
 
 #include <ADG2128.h>
 
+#if defined(ADG2128_DEBUG)
+  // If debugging is enabled in the build, another dependency will be needed.
+  // https://github.com/jspark311/CppPotpourri
+  #include <StringBuilder.h>
+#endif
 
 static const uint8_t readback_addr[12] = {
   0x34, 0x3c, 0x74, 0x7c, 0x35, 0x3d, 0x75, 0x7d, 0x36, 0x3e, 0x76, 0x7e
@@ -317,22 +322,19 @@ int8_t ADG2128::_write_device(uint8_t row, uint8_t conn) {
 }
 
 
+#if defined(ADG2128_DEBUG)
 /*
-* Dump this item to the dev log.
+* Dump this item to the given buffer.
 */
-void ADG2128::printDebug() {
-  Serial.println("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
-  Serial.print("\tInitialized:    ");
-  Serial.println(initialized() ? 'y' : 'n');
-  Serial.print("\tRESET_PIN:      ");
-  Serial.println(_RESET_PIN, DEC);
+void ADG2128::printDebug(StringBuilder* output) {
+  output->concat("ADG2128 8x12 cross-point switch\n--------------------------------------------\n");
+  output->concatf("\tInitialized:    %c\n", initialized() ? 'y' : 'n');
+  output->concatf("\tRESET_PIN:      %u\n", _RESET_PIN);
   if (initialized()) {
     for (int i = 0; i < 12; i++) {
-      Serial.print("\tRow ");
-      Serial.print(i, DEC);
-      Serial.print("\t0x");
-      Serial.println(_values[i], HEX);
+      output->concatf("\tRow %u\t0x%02x\n", i, _values[i]);
     }
   }
-  Serial.print("\n");
 }
+
+#endif  // ADG2128_DEBUG

@@ -26,18 +26,28 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef ADG2128_CROSSPOINT_H
 #define ADG2128_CROSSPOINT_H
 
+// If debugging is enabled in the build, another dependency will be needed.
+// https://github.com/jspark311/CppPotpourri
+#define ADG2128_DEBUG 1
+
 #include <inttypes.h>
 #include <stdlib.h>
+#include <Wire.h>
 #ifdef ARDUINO
   #include "Arduino.h"
-  #include <Wire.h>
 #else
 #endif
+
+#if defined(ADG2128_DEBUG)
+  // If debugging is enabled in the build, another dependency will be needed.
+  // https://github.com/jspark311/CppPotpourri
+  #include <StringBuilder.h>
+#endif  // ADG2128_DEBUG
+
 
 #define ADG2128_DEFAULT_I2C_ADDR    0x70
 #define ADG2128_SERIALIZE_VERSION   0x01
 #define ADG2128_SERIALIZE_SIZE        17
-
 
 /* Class flags. */
 #define ADG2128_FLAG_INITIALIZED    0x0001
@@ -69,7 +79,9 @@ class ADG2128 {
     ADG2128(const uint8_t* buf, const unsigned int len);
     ~ADG2128();
 
-    void printDebug();
+    #if defined(ADG2128_DEBUG)
+      void printDebug(StringBuilder*);
+    #endif  // ADG2128_DEBUG
 
     inline ADG2128_ERROR init() {  return init(_bus);  };
     ADG2128_ERROR init(TwoWire*); // Perform bus-related init tasks.

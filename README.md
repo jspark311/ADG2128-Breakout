@@ -18,6 +18,15 @@ A breakout board for Analog Devices' 8x12 analog cross-point switch
 
 ------------------------
 
+### Usage under Arduino
+
+In order to use this driver with debugging enabled, you also need StringBuilder.
+Clone the following repo into your user libraries (wherever you keep them):
+
+[StringBuilder](https://github.com/jspark311/CppPotpourri)
+
+------------------------
+
 ### Notes on driver features:
 
 #### Optional pins
