@@ -94,7 +94,8 @@ class ADG2128 {
     ADG2128_ERROR unsetRoute(uint8_t col, uint8_t row, bool defer = false);
     uint8_t serialize(uint8_t* buf, unsigned int len);
     int8_t  unserialize(const uint8_t* buf, const unsigned int len);
-    uint8_t getValue(uint8_t row);
+    uint8_t  getCols(uint8_t row);
+    uint16_t getRows(uint8_t col);
 
     inline bool initialized() {  return _adg_flag(ADG2128_FLAG_INITIALIZED);  };
     inline bool preserveOnDestroy() {

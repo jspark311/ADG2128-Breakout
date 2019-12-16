@@ -291,9 +291,27 @@ int8_t ADG2128::_read_device() {
 }
 
 
-uint8_t ADG2128::getValue(uint8_t row) {
+/*
+* Returns a bitmask of all the columns connected to this row. This is the native
+*   data returned from the part, so this lookup is cheap.
+*/
+uint8_t ADG2128::getCols(uint8_t row) {
   if (row > 11) return 0;
   return _values[row];
+}
+
+
+/*
+* Returns a bitmask of all the rows connected to this column.
+*/
+uint16_t ADG2128::getRows(uint8_t col) {
+  if (col > 7) return 0;
+  uint16_t ret = 0;
+  for (uint8_t i = 0; i < 12; i++) {
+    uint8_t val = (_values[i] >> col) & 1;
+    ret |= (val << i);
+  }
+  return ret;
 }
 
 
